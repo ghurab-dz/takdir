@@ -1,0 +1,88 @@
+// PRD section 4 — Data Model
+// PostgreSQL (Neon) from day one; SQLite is intentionally not used
+// because Render's free tier has an ephemeral filesystem.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Pooled (PgBouncer) for app traffic; direct connection for schema DDL.
+  // See: neon-postgres skill, "Pooled vs direct connections".
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+model Contractor {
+  id         String   @id @default(uuid())
+  name       String
+  phone      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  priceItems PriceItem[]
+  estimates  Estimate[]
+
+  @@map("contractors")
+}
+
+model PriceItem {
+  id           String   @id @default(uuid())
+  contractorId String   @map("contractor_id")
+  category     String   // دهان / بلاط / كهرباء / عام ...
+  itemName     String   @map("item_name")
+  unit         String   // م² / نقطة / وحدة / بالمقطوع
+  unitPrice    Decimal  @map("unit_price") @db.Decimal(12, 2)
+  isActive     Boolean  @default(true) @map("is_active")
+
+  contractor    Contractor     @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  estimateItems EstimateItem[]
+
+  @@map("price_items")
+}
+
+enum EstimateStatus {
+  draft
+  final
+}
+
+model Estimate {
+  id              String         @id @default(uuid())
+  contractorId    String         @map("contractor_id")
+  clientName      String?        @map("client_name")
+  roomType        String?        @map("room_type")
+  areaM2          Decimal?       @map("area_m2") @db.Decimal(10, 2)
+  rawDescription  String         @map("raw_description")
+  photoPaths      String[]       @map("photo_paths")
+  aiNotes         String?        @map("ai_notes")
+  status          EstimateStatus @default(draft)
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  contractor Contractor     @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  items      EstimateItem[]
+
+  @@map("estimates")
+}
+
+enum EstimateItemSource {
+  ai_extracted
+  manual
+}
+
+model EstimateItem {
+  id          String             @id @default(uuid())
+  estimateId  String             @map("estimate_id")
+  priceItemId String?            @map("price_item_id") // null → free/manual or unmatched row
+  itemName    String             @map("item_name")
+  quantity    Decimal            @db.Decimal(10, 2)
+  unit        String
+  unitPrice   Decimal            @map("unit_price") @db.Decimal(12, 2) // copied at creation time
+  lineTotal   Decimal            @map("line_total") @db.Decimal(14, 2) // quantity × unit_price
+  matched     Boolean            @default(true) // false → AI proposed it but no price-item match
+  source      EstimateItemSource
+
+  estimate  Estimate   @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  priceItem PriceItem? @relation(fields: [priceItemId], references: [id], onDelete: SetNull)
+
+  @@map("estimate_items")
+}

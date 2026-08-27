@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+@theme {
+  /* Palette — ledger paper, ink, zellige teal, workshop ochre */
+  --color-paper: #f6f3ec;
+  --color-card: #fffdf9;
+  --color-ink: #1d2a2b;
+  --color-ink-soft: #55636a;
+  --color-line: #e2ddd0;
+  --color-teal: #0e6e64;
+  --color-teal-deep: #0a4f48;
+  --color-ochre: #b45309;
+  --color-ochre-soft: #f7ead9;
+  --color-danger: #b42318;
+
+  --font-sans: var(--font-tajawal), "Segoe UI", system-ui, sans-serif;
+  --font-display: var(--font-cairo), var(--font-tajawal), sans-serif;
+  --font-brand: var(--font-ruqaa), var(--font-cairo), serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/* ---- signature: measuring-tape ruler strip ---- */
+.ruler {
+  height: 10px;
+  background-image:
+    repeating-linear-gradient(to left, var(--color-ink) 0 1px, transparent 1px 40px),
+    repeating-linear-gradient(to left, var(--color-ink) 0 1px, transparent 1px 8px);
+  background-size:
+    100% 10px,
+    100% 5px;
+  background-repeat: repeat-x;
+  background-position: bottom;
+  opacity: 0.35;
+}
+
+.ruler-teal {
+  background-image:
+    repeating-linear-gradient(to left, var(--color-teal) 0 1px, transparent 1px 40px),
+    repeating-linear-gradient(to left, var(--color-teal) 0 1px, transparent 1px 8px);
+  opacity: 0.5;
+}
+
+/* Numbers throughout the app: render as a single left-to-right unit even in
+   the RTL context, so digits don't get bidi-reordered (which flipped the
+   total cost and made digits spill out of their boxes). tabular-nums keeps
+   figures aligned. */
+.tnum,
+input[type="number"] {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* ---- form controls ---- */
+.field {
+  width: 100%;
+  border: 1px solid var(--color-line);
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+  color: var(--color-ink);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field:focus {
+  outline: none;
+  border-color: var(--color-teal);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-teal) 18%, transparent);
+}
+.field::placeholder {
+  color: #9aa5a1;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  padding: 0.55rem 1.1rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background-color 0.15s, transform 0.05s;
+  border: 1px solid transparent;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.btn-primary {
+  background: var(--color-teal);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-teal-deep);
+}
+.btn-ghost {
+  background: transparent;
+  border-color: var(--color-line);
+  color: var(--color-ink);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: #efece3;
+}
+.btn-danger {
+  background: transparent;
+  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
+}
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+}
+
+.card {
+  background: var(--color-card);
+  border: 1px solid var(--color-line);
+  border-radius: 0.75rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+/* ledger table */
+.ledger {
+  width: 100%;
+  border-collapse: collapse;
+}
+.ledger th {
+  font-size: 0.75rem;
+  color: var(--color-ink-soft);
+  font-weight: 700;
+  text-align: right;
+  padding: 0.5rem 0.5rem;
+  border-bottom: 1px solid var(--color-line);
+}
+.ledger td {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--color-line);
+  vertical-align: middle;
+}
+
+/* ---- print: the quote page must look like a clean paper document ---- */
+@media print {
+  body {
+    background: #fff;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-sheet {
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+}
