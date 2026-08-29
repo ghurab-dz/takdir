@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -43,3 +44,8 @@ next-env.d.ts
 # uploaded estimate photos (ephemeral, user data)
 /public/uploads/
 .neon
+
+# local demo fallback (used when DATABASE_URL missing)
+data/mock-db.json
+dev.log
+*.ps1

@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: takdir
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run db:generate && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_UNPOOLED
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      # Optional:
+      # - key: GEMINI_MODEL
+      #   value: gemini-3.6-flash
+      #   sync: false

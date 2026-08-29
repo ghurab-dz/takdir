@@ -4,6 +4,7 @@ import { Tajawal, Cairo, Aref_Ruqaa } from "next/font/google";
 import "./globals.css";
 import { MobileNav } from "@/components/mobile-nav";
 import { ToastProvider } from "@/components/ui";
+import { DemoBanner } from "@/components/demo-banner";
 
 const tajawal = Tajawal({
   subsets: ["arabic", "latin"],
@@ -76,6 +77,8 @@ export default function RootLayout({
             </div>
             <div className="ruler ruler-teal ruler-animated mx-auto max-w-3xl" />
           </header>
+
+          <DemoBanner />
 
           {/* Main — add bottom padding on mobile for bottom-nav */}
           <main className="mx-auto max-w-3xl px-4 py-5 pb-28 sm:pb-6 sm:py-6">{children}</main>
