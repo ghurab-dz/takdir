@@ -48,4 +48,5 @@ next-env.d.ts
 # local demo fallback (used when DATABASE_URL missing)
 data/mock-db.json
 dev.log
+dev.err.log
 *.ps1
