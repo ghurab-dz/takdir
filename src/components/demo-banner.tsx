@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 
 export async function DemoBanner() {
+  // Never show in production — MVP is price-list only + empty CTA
+  if (process.env.NODE_ENV === "production") return null;
   const isMock = !process.env.DATABASE_URL || process.env.DATABASE_URL.trim() === "";
   if (!isMock) return null;
 
@@ -28,20 +30,16 @@ export async function DemoBanner() {
               <span className="chip chip-teal hidden sm:inline-flex">demo</span>
             </div>
             <p className="mt-1 text-xs leading-relaxed text-ink-soft">
-              {estimateCount > 0 ? (
-                <>
-                  يوجد <span className="font-bold text-ink">{estimateCount}</span> عروض و <span className="font-bold text-ink">13</span> بند مسعّر جاهزة للاختبار.
-                  جرّب: افتح أي عرض ← عدّل كمية ← احفظ ← اطبع/أرسل واتساب.
-                </>
-              ) : (
-                <>سيتم إنشاء بيانات تجريبية تلقائيًا عند أول زيارة.</>
-              )}{" "}
-              بدون قاعدة بيانات — محفوظة في <span className="font-mono text-[11px] bg-white border border-line px-1 py-0.5 rounded">data/mock-db.json</span>
+              قائمة أسعار ابتدائية (<span className="font-bold text-ink">13</span> بند) جاهزة كقالب — عدّل الأسعار لأسعارك الحقيقية ثم أنشئ أول تقدير. اللوحة فارغة حتى الإنشاء.
+              {" "}بدون قاعدة بيانات — محفوظة في <span className="font-mono text-[11px] bg-white border border-line px-1 py-0.5 rounded">data/mock-db.json</span>
+              {estimateCount > 0 && (
+                <> — يوجد <span className="font-bold text-ink">{estimateCount}</span> تقدير حاليًا.</>
+              )}
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <span className="chip bg-white border-line text-ink-soft">✓ 5 عروض متنوعة (مسودة + نهائي)</span>
-              <span className="chip bg-white border-line text-ink-soft">✓ بند غير مطابق للتعليم</span>
+              <span className="chip bg-white border-line text-ink-soft">✓ 13 بند مسعّر (قالب قابل للتعديل)</span>
               <span className="chip bg-white border-line text-ink-soft">✓ واتساب/طباعة جاهز</span>
+              <span className="chip bg-white border-line text-ink-soft">✓ ابدأ فارغًا — CTA أول تقدير</span>
             </div>
           </div>
         </div>
