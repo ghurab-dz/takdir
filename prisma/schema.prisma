@@ -21,6 +21,7 @@ model Contractor {
   createdAt  DateTime @default(now()) @map("created_at")
 
   priceItems PriceItem[]
+  materials  Material[]
   estimates  Estimate[]
 
   @@map("contractors")
@@ -29,9 +30,9 @@ model Contractor {
 model PriceItem {
   id           String   @id @default(uuid())
   contractorId String   @map("contractor_id")
-  category     String   // دهان / بلاط / كهرباء / عام ...
+  category     String // دهان / بلاط / كهرباء / عام ...
   itemName     String   @map("item_name")
-  unit         String   // م² / نقطة / وحدة / بالمقطوع
+  unit         String // م² / نقطة / وحدة / بالمقطوع
   unitPrice    Decimal  @map("unit_price") @db.Decimal(12, 2)
   isActive     Boolean  @default(true) @map("is_active")
 
@@ -46,22 +47,115 @@ enum EstimateStatus {
   final
 }
 
-model Estimate {
-  id              String         @id @default(uuid())
-  contractorId    String         @map("contractor_id")
-  clientName      String?        @map("client_name")
-  roomType        String?        @map("room_type")
-  areaM2          Decimal?       @map("area_m2") @db.Decimal(10, 2)
-  rawDescription  String         @map("raw_description")
-  photoPaths      String[]       @map("photo_paths")
-  aiNotes         String?        @map("ai_notes")
-  status          EstimateStatus @default(draft)
-  createdAt       DateTime       @default(now()) @map("created_at")
+enum OptionTier {
+  economy
+  mid
+  premium
+}
 
-  contractor Contractor     @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+model Material {
+  id           String     @id @default(uuid())
+  contractorId String     @map("contractor_id")
+  category     String
+  itemName     String     @map("item_name")
+  grade        OptionTier
+  unit         String
+  unitPrice    Decimal    @map("unit_price") @db.Decimal(12, 2)
+  visualHint   String?    @map("visual_hint")
+  isActive     Boolean    @default(true) @map("is_active")
+
+  contractor Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  @@index([contractorId, grade])
+  @@map("materials")
+}
+
+model Estimate {
+  id               String         @id @default(uuid())
+  contractorId     String         @map("contractor_id")
+  clientName       String?        @map("client_name")
+  roomType         String?        @map("room_type")
+  areaM2           Decimal?       @map("area_m2") @db.Decimal(10, 2)
+  rawDescription   String         @map("raw_description")
+  photoPaths       String[]       @map("photo_paths")
+  aiNotes          String?        @map("ai_notes")
+  status           EstimateStatus @default(draft)
+  proofHash        String?        @map("proof_hash")
+  lastRenderedAt   DateTime?      @map("last_rendered_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  // Phase 1 — consultation redesign fields
+  lengthM          Decimal?       @map("length_m") @db.Decimal(10, 2)
+  widthM           Decimal?       @map("width_m") @db.Decimal(10, 2)
+  heightM          Decimal?       @map("height_m") @db.Decimal(10, 2)
+  style            String?        @map("style")
+  styleTags        String[]       @map("style_tags")
+  budgetTier       String?        @map("budget_tier")
+  budgetDZD        Decimal?       @map("budget_dzd") @db.Decimal(14, 2)
+  contractorNotes  String?        @map("contractor_notes") @db.Text
+  selectedOptionId String?        @map("selected_option_id")
+
+  contractor Contractor       @relation(fields: [contractorId], references: [id], onDelete: Cascade)
   items      EstimateItem[]
+  renders    EstimateRender[]
+  options    EstimateOption[]
 
   @@map("estimates")
+}
+
+model EstimateOption {
+  id         String     @id @default(uuid())
+  estimateId String     @map("estimate_id")
+  tier       OptionTier
+  title      String
+  total      Decimal    @db.Decimal(14, 2)
+  proofHash  String?    @map("proof_hash")
+
+  estimate Estimate             @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  items    EstimateOptionItem[]
+  renders  EstimateRender[]
+
+  @@index([estimateId, tier])
+  @@unique([estimateId, tier])
+  @@map("estimate_options")
+}
+
+model EstimateOptionItem {
+  id         String  @id @default(uuid())
+  optionId   String  @map("option_id")
+  materialId String? @map("material_id")
+  itemName   String  @map("item_name")
+  quantity   Decimal @db.Decimal(10, 2)
+  unit       String
+  unitPrice  Decimal @map("unit_price") @db.Decimal(12, 2)
+  lineTotal  Decimal @map("line_total") @db.Decimal(14, 2)
+  category   String
+
+  option EstimateOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@map("estimate_option_items")
+}
+
+model EstimateRender {
+  id             String    @id @default(uuid())
+  estimateId     String    @map("estimate_id")
+  basePhotoPath  String    @map("base_photo_path")
+  renderPath     String?   @map("render_path")
+  status         String    @default("pending") // pending | done | failed
+  model          String?
+  promptHash     String?   @map("prompt_hash")
+  promptSnapshot String?   @map("prompt_snapshot") @db.Text
+  error          String?   @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at")
+  renderedAt     DateTime? @map("rendered_at")
+  tier           String?   @map("tier")
+  optionId       String?   @map("option_id")
+
+  estimate Estimate        @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  option   EstimateOption? @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@index([estimateId])
+  @@index([estimateId, tier])
+  @@map("estimate_renders")
 }
 
 enum EstimateItemSource {

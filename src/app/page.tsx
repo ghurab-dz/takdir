@@ -43,9 +43,9 @@ export default async function DashboardPage() {
   return (
     <div>
       <SectionHeader
-        eyebrow="لوحة العمل"
+        eyebrow="لوحة الاستشارات"
         title={`أهلًا، ${contractor.name}`}
-        hint="كل تقديراتك الأخيرة في مكان واحد. أنشئ تقديرًا جديدًا بصور الغرفة — يصل العرض خلال دقائق."
+        hint="كل استشاراتك الأخيرة. أنشئ استشارة جديدة بصور الغرفة والقياسات — احصل على 3 خيارات مسعّرة ومرئية."
       />
 
       {needsSetup && (
@@ -104,7 +104,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <Link
+          <Link
           href="/estimates/new"
           className="card card-hover col-span-2 flex flex-col items-center justify-center gap-2 border-dashed border-teal/45 bg-teal-50 p-4 text-teal sm:col-span-1"
         >
@@ -112,9 +112,9 @@ export default async function DashboardPage() {
             <span className="text-xl font-extrabold leading-none">+</span>
           </span>
           <div className="text-center">
-            <div className="text-sm font-extrabold">تقدير جديد</div>
-            <div className="mt-0.5 hidden text-xs font-medium text-teal/80 sm:block">صوّر الغرفة وابدأ</div>
-            <div className="mt-0.5 text-xs font-medium text-teal/80 sm:hidden">صوّر • صف • استخرج</div>
+            <div className="text-sm font-extrabold">استشارة جديدة</div>
+            <div className="mt-0.5 hidden text-xs font-medium text-teal/80 sm:block">3 خيارات مسعّرة ومرئية</div>
+            <div className="mt-0.5 text-xs font-medium text-teal/80 sm:hidden">صور • قياس • 3 خيارات</div>
           </div>
         </Link>
       </div>

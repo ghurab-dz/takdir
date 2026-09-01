@@ -75,6 +75,84 @@ export function findBestMatch(
   return bestScore >= FUZZY_THRESHOLD ? best : null;
 }
 
+/** Extended match line for Material-aware tiered flow (keeps category/materialId) */
+export interface TieredMatchedLine extends MatchedLine {
+  materialId: string | null;
+  category: string;
+}
+
+/**
+ * Match extracted items against a grade-filtered material list.
+ * Tries tier-filtered materials first; if no hit, falls back across all grades.
+ * Uses same normalize/tokenOverlap logic (threshold 0.6) as legacy match.
+ */
+export function matchTieredItems(
+  extracted: { itemName: string; quantity: number; unit: string; category?: string }[],
+  materialsForTier: { id: string; itemName: string; unit: string; unitPrice: number; category: string }[],
+  fallbackMaterials?: { id: string; itemName: string; unit: string; unitPrice: number; category: string }[],
+): TieredMatchedLine[] {
+  const seen = new Map<string, TieredMatchedLine>();
+  const tierEntries: PricelistEntry[] = materialsForTier.map((m) => ({
+    id: m.id,
+    itemName: m.itemName,
+    unit: m.unit,
+    unitPrice: m.unitPrice,
+  }));
+  const fallbackEntries: PricelistEntry[] | null = fallbackMaterials
+    ? fallbackMaterials.map((m) => ({ id: m.id, itemName: m.itemName, unit: m.unit, unitPrice: m.unitPrice }))
+    : null;
+  // category lookup for material id
+  const catById = new Map<string, string>();
+  for (const m of materialsForTier) catById.set(m.id, m.category);
+  if (fallbackMaterials) for (const m of fallbackMaterials) if (!catById.has(m.id)) catById.set(m.id, m.category);
+
+  for (const item of extracted) {
+    const qty = Number.isFinite(item.quantity) && item.quantity > 0 ? item.quantity : 0;
+    if (qty === 0) continue;
+    let hit = findBestMatch(item.itemName, tierEntries);
+    let hitCategory: string | null = null;
+    if (hit) {
+      hitCategory = catById.get(hit.id) ?? (item.category ?? "عام");
+    } else if (fallbackEntries) {
+      hit = findBestMatch(item.itemName, fallbackEntries);
+      if (hit) hitCategory = catById.get(hit.id) ?? (item.category ?? "عام");
+    }
+    // If still no hit, keep AI name/category as unmatched with 0 price
+    const line: TieredMatchedLine = hit
+      ? {
+          priceItemId: null,
+          materialId: hit.id,
+          itemName: hit.itemName,
+          quantity: qty,
+          unit: hit.unit,
+          unitPrice: hit.unitPrice,
+          lineTotal: Math.round(qty * hit.unitPrice * 100) / 100,
+          matched: true,
+          category: hitCategory ?? (item.category ?? "عام"),
+        }
+      : {
+          priceItemId: null,
+          materialId: null,
+          itemName: item.itemName,
+          quantity: qty,
+          unit: item.unit || "وحدة",
+          unitPrice: 0,
+          lineTotal: 0,
+          matched: false,
+          category: item.category ?? "عام",
+        };
+    const key = line.materialId ? `mat:${line.materialId}` : `unmatched:${normalizeArabic(line.itemName)}`;
+    const prev = seen.get(key);
+    if (prev) {
+      prev.quantity = Math.round((prev.quantity + line.quantity) * 100) / 100;
+      prev.lineTotal = Math.round(prev.quantity * prev.unitPrice * 100) / 100;
+    } else {
+      seen.set(key, line);
+    }
+  }
+  return [...seen.values()];
+}
+
 /** Match a batch of AI-extracted items against the contractor's price list. */
 export function matchExtractedItems(
   extracted: { itemName: string; quantity: number; unit: string }[],

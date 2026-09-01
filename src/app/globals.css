@@ -671,6 +671,169 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible), input:focus:not(:
   .ruler-animated { animation: none; }
 }
 
+/* ---- render: before/after slider (quote-locked proof) ---- */
+.ba-slider {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-line);
+  background: var(--color-paper-100);
+  aspect-ratio: 16 / 11;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.ba-slider img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+.ba-after-wrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ba-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 48px;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  z-index: 2;
+  pointer-events: auto;
+  cursor: ew-resize;
+  touch-action: none;
+}
+/* vertical line */
+.ba-handle::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.18);
+  pointer-events: none;
+}
+.ba-handle-circle {
+  position: relative;
+  z-index: 1;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--color-line);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.14);
+  display: grid;
+  place-items: center;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  pointer-events: none;
+}
+.ba-slider:active .ba-handle-circle,
+.ba-handle:active .ba-handle-circle {
+  transform: scale(1.08);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+}
+.ba-handle-arrows {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--color-ink);
+  line-height: 1;
+  pointer-events: none;
+}
+.ba-handle-svg {
+  width: 16px;
+  height: 16px;
+  color: var(--color-ink);
+  display: block;
+  pointer-events: none;
+}
+.ba-slider:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--color-teal);
+  border-radius: 0.75rem;
+}
+.ba-badge {
+  position: absolute;
+  top: 10px;
+  z-index: 3;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.55);
+  pointer-events: none;
+}
+.ba-badge-before { right: 10px; background: rgba(30,38,43,0.72); color: #fff; }
+.ba-badge-after { left: 10px; background: rgba(191,77,40,0.92); color: #fff; border-color: rgba(255,255,255,0.35); }
+.render-grid {
+  display: grid;
+  gap: 12px;
+}
+@media (min-width: 640px) {
+  .render-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .render-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* ---- range (budget) ---- */
+input[type="range"] {
+  accent-color: var(--color-teal);
+  width: 100%;
+  height: 6px;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  background: var(--color-line);
+  border-radius: 999px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-teal);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  margin-top: -6px;
+}
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  background: var(--color-line);
+  border-radius: 999px;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-teal);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+}
+
+/* ---- compare selected ---- */
+.compare-selected {
+  border-color: var(--color-teal) !important;
+  background: color-mix(in srgb, var(--color-teal-50) 88%, white 12%);
+  box-shadow: 0 0 0 1px var(--color-teal), var(--shadow-card-hover);
+}
+
 /* ---- print ---- */
 @media print {
   body {
@@ -686,4 +849,5 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible), input:focus:not(:
     max-width: none !important;
   }
   .bottom-nav { display: none !important; }
+  .ba-slider { aspect-ratio: 16 / 10; break-inside: avoid; }
 }

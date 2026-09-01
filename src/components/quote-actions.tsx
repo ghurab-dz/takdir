@@ -8,10 +8,12 @@ export function QuoteActions({
   estimateId,
   whatsappUrl,
   whatsappText,
+  renders,
 }: {
   estimateId: string;
   whatsappUrl: string;
   whatsappText: string;
+  renders?: string[];
 }) {
   const [copied, setCopied] = useState(false);
   const { showToast } = useToast();
@@ -68,6 +70,50 @@ export function QuoteActions({
           <span className="sm:hidden">تعديل</span>
         </Link>
       </div>
+
+      {renders && renders.length > 0 && (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            className="btn btn-ghost gap-1.5"
+            onClick={async () => {
+              // Try native share with files if supported, else download
+              try {
+                const files: File[] = [];
+                for (const src of renders) {
+                  try {
+                    const res = await fetch(src);
+                    const blob = await res.blob();
+                    const name = src.split("/").pop() || "render.jpg";
+                    files.push(new File([blob], name, { type: blob.type }));
+                  } catch {}
+                }
+                if (files.length > 0 && navigator.canShare?.({ files })) {
+                  await navigator.share({ files, text: whatsappText, title: "عرض السعر — تقدير" });
+                  showToast("تمت المشاركة مع الصور", "success");
+                  return;
+                }
+              } catch {}
+              // Fallback: download first render
+              const a = document.createElement("a");
+              a.href = renders[0];
+              a.download = `takdir-render-${estimateId.slice(0, 6)}.jpg`;
+              a.click();
+              showToast("تم تنزيل المعاينة — أرفقها في واتساب", "success");
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-4 w-4">
+              <path d="M12 16V7M12 7l-4 4M12 7l4 4" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M4 17v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1" strokeWidth={1.7} strokeLinecap="round" />
+            </svg>
+            <span className="hidden sm:inline">مشاركة/تنزيل الصور</span>
+            <span className="sm:hidden">تنزيل الصور</span>
+          </button>
+          <span className="hidden sm:flex items-center justify-center text-xs font-medium text-ink-faint px-2">
+            الصور داخل عرض السعر المطبوع — تُحفظ مع PDF
+          </span>
+        </div>
+      )}
 
       <p className="text-center text-xs font-medium text-ink-faint">يُفتح واتساب مع نص العرض جاهزًا — اختر الزبون ثم أرسل.</p>
     </div>

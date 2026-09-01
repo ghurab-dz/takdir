@@ -59,6 +59,9 @@ export default function RootLayout({
                 <Link href="/" className="rounded-lg px-3 py-2 text-ink hover:bg-paper transition-colors">
                   التقديرات
                 </Link>
+                <Link href="/materials" className="rounded-lg px-3 py-2 text-ink hover:bg-paper transition-colors">
+                  كتالوج الخامات
+                </Link>
                 <Link href="/prices" className="rounded-lg px-3 py-2 text-ink hover:bg-paper transition-colors">
                   قائمة الأسعار
                 </Link>
@@ -66,7 +69,7 @@ export default function RootLayout({
                   href="/estimates/new"
                   className="mr-1 inline-flex items-center gap-1 rounded-lg bg-teal px-4 py-2 text-white shadow-sm hover:bg-teal-deep transition-colors"
                 >
-                  <span className="text-lg leading-none">+</span> تقدير جديد
+                  <span className="text-lg leading-none">+</span> استشارة جديدة
                 </Link>
               </nav>
 

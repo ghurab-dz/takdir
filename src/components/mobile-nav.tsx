@@ -29,6 +29,7 @@ export function MobileNav() {
   const pathname = usePathname();
   const isHome = pathname === "/";
   const isPrices = pathname?.startsWith("/prices");
+  const isMaterials = pathname?.startsWith("/materials");
   const isNew = pathname?.startsWith("/estimates/new");
 
   return (

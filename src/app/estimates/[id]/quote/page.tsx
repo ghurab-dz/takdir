@@ -4,6 +4,7 @@ import { ensureDefaultContractor } from "@/lib/seed";
 import { formatAmount, formatQty, formatDate } from "@/lib/format";
 import { buildQuoteText, buildWhatsAppLink } from "@/lib/whatsapp";
 import { QuoteActions } from "@/components/quote-actions";
+import { QuoteRenderGallery } from "@/components/quote-render-gallery";
 
 export const dynamic = "force-dynamic";
 
@@ -41,9 +42,58 @@ export default async function QuotePage({
   });
   const whatsappUrl = buildWhatsAppLink(whatsappText, null);
 
+  // Renders — new tiered (consultation) vs legacy single-quote
+  let renders: { basePhotoPath: string; renderPath: string | null; status: string; model: string | null }[] = [];
+  let proofHash: string | null = null;
+  let lastRenderedAt: string | null = null;
+  let selectedTier: string | null = null;
+  try {
+    const estAny = estimate as unknown as { selectedOptionId?: string | null; proofHash?: string | null; lastRenderedAt?: Date | null };
+    const selectedOptionId = estAny.selectedOptionId ?? null;
+    proofHash = estAny.proofHash ?? null;
+    lastRenderedAt = estAny.lastRenderedAt ? (estAny.lastRenderedAt as Date).toISOString() : null;
+
+    // Try consultation path: options + tiered renders
+    if (selectedOptionId) {
+      try {
+        const opt = await (prisma as unknown as { estimateOption: { findUnique: (a: unknown) => Promise<{ tier: string; proofHash: string | null } | null> } }).estimateOption.findUnique({
+          where: { id: selectedOptionId },
+        });
+        if (opt) {
+          selectedTier = opt.tier;
+          proofHash = (opt.proofHash as string | null) ?? proofHash;
+          const tierRenders = await (prisma as unknown as { estimateRender: { findMany: (a: unknown) => Promise<never[]> } }).estimateRender.findMany({
+            where: { estimateId: id, optionId: selectedOptionId } as unknown as object,
+            orderBy: { createdAt: "asc" },
+          });
+          if ((tierRenders as unknown[]).length > 0) {
+            renders = tierRenders as unknown as typeof renders;
+          }
+        }
+      } catch {}
+    }
+    // fallback to legacy: all renders for estimate
+    if (renders.length === 0) {
+      const rows = await (prisma as unknown as { estimateRender: { findMany: (a: unknown) => Promise<never[]> } }).estimateRender.findMany({
+        where: { estimateId: id },
+        orderBy: { createdAt: "asc" },
+      });
+      renders = rows as unknown as typeof renders;
+      // if tiered renders exist but no selected, show all done (for preview before selection)
+      if (renders.length === 0 && selectedTier == null) {
+        // keep empty
+      }
+    }
+  } catch {}
+
   return (
     <div>
-      <QuoteActions estimateId={estimate.id} whatsappUrl={whatsappUrl} whatsappText={whatsappText} />
+      <QuoteActions
+        estimateId={estimate.id}
+        whatsappUrl={whatsappUrl}
+        whatsappText={whatsappText}
+        renders={renders.filter((r) => r.status === "done" && r.renderPath).map((r) => r.renderPath as string)}
+      />
 
       {/* preview wrapper — horizontal scroll hint on mobile */}
       <div className="mx-auto max-w-2xl">
@@ -59,6 +109,12 @@ export default async function QuotePage({
         >
           {/* subtle paper texture header band */}
           <div className="h-1.5 w-full bg-teal" aria-hidden />
+          {/* HERO: quote-locked visual proof — inside print sheet so PDF includes it */}
+          {renders.length > 0 && (
+            <div className="p-4 sm:p-5 pb-0">
+              <QuoteRenderGallery renders={renders} proofHash={proofHash} renderedAt={lastRenderedAt} />
+            </div>
+          )}
           <div className="p-5 sm:p-8">
             {/* header */}
             <div className="flex items-start justify-between gap-4 border-b-2 border-ink pb-5">
