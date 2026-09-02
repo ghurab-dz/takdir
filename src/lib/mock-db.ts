@@ -331,6 +331,42 @@ const contractor = {
 
 // --- priceItem ---
 const priceItem = {
+  async updateMany(args: { where?: Record<string, unknown>; data: Partial<Pick<PriceItem, "isActive">> }) {
+    let count = 0;
+    for (const p of store.priceItems) {
+      if (!matchesWhere(p as unknown as Record<string, unknown>, args.where)) continue;
+      if (args.data.isActive !== undefined) p.isActive = Boolean(args.data.isActive);
+      count++;
+    }
+    if (count) saveStore();
+    return { count };
+  },
+  async createMany(args: { data: { contractorId: string; category: string; itemName: string; unit: string; unitPrice: number | string; isActive?: boolean }[] }) {
+    let count = 0;
+    for (const d of args.data) {
+      const pi: PriceItem = {
+        id: randomUUID(),
+        contractorId: d.contractorId,
+        category: d.category,
+        itemName: d.itemName,
+        unit: d.unit,
+        unitPrice: Number(d.unitPrice),
+        isActive: d.isActive ?? true,
+      };
+      store.priceItems.push(pi);
+      count++;
+    }
+    saveStore();
+    return { count };
+  },
+  async deleteMany(args?: { where?: Record<string, unknown> }) {
+    const before = store.priceItems.length;
+    if (!args?.where) store.priceItems = [];
+    else store.priceItems = store.priceItems.filter((p) => !matchesWhere(p as unknown as Record<string, unknown>, args.where));
+    const count = before - store.priceItems.length;
+    if (count) saveStore();
+    return { count };
+  },
   async findMany(args?: { where?: Record<string, unknown>; orderBy?: Record<string, "asc" | "desc"> | Record<string, "asc" | "desc">[] }) {
     let arr = store.priceItems.filter((p) => matchesWhere(p as unknown as Record<string, unknown>, args?.where));
     if (args?.orderBy) arr = sortBy(arr, args.orderBy as never);
@@ -383,6 +419,16 @@ const priceItem = {
 
 // --- material ---
 const material = {
+  async updateMany(args: { where?: Record<string, unknown>; data: Partial<Pick<Material, "isActive">> }) {
+    let count = 0;
+    for (const m of store.materials) {
+      if (!matchesWhere(m as unknown as Record<string, unknown>, args.where)) continue;
+      if (args.data.isActive !== undefined) m.isActive = Boolean(args.data.isActive);
+      count++;
+    }
+    if (count) saveStore();
+    return { count };
+  },
   async findMany(args?: { where?: Record<string, unknown>; orderBy?: Record<string, "asc" | "desc"> | Record<string, "asc" | "desc">[] }) {
     let arr = store.materials.filter((m) => matchesWhere(m as unknown as Record<string, unknown>, args?.where));
     if (args?.orderBy) arr = sortBy(arr, args.orderBy as never);

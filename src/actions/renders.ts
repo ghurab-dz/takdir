@@ -4,7 +4,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { getAiProvider, getFallbackProvider, isQuotaError } from "@/lib/ai";
+import { getImageProvider, isQuotaError } from "@/lib/ai";
 import type { PhotoInput, RenderItem, Tier } from "@/lib/ai/types";
 import { buildRenderPrompt, hashRenderInput } from "@/lib/ai/render-prompt";
 import { computeProofHash } from "@/lib/render-hash";
@@ -94,6 +94,22 @@ export async function generateOptionRenders(
   const styleTags: string[] = Array.isArray((est as unknown as { styleTags?: unknown }).styleTags)
     ? ((est as unknown as { styleTags: string[] }).styleTags ?? [])
     : [];
+  const contractorNotes: string | null =
+    (est as unknown as { contractorNotes?: string | null }).contractorNotes ??
+    (est as unknown as { estimate?: { contractorNotes?: string | null } }).estimate?.contractorNotes ??
+    null;
+
+  // Build material hint lookup for render FINISH fields (so "أحمر" actually reaches the image model)
+  const allMatIds = [...new Set(options.flatMap((o) => (o.items ?? []).map((it: unknown) => (it as { materialId?: string | null }).materialId).filter(Boolean as unknown as (v: unknown) => v is string)))] as string[];
+  const hintById = new Map<string, string | null>();
+  if (allMatIds.length > 0) {
+    try {
+      const mats = await (prisma as unknown as { material: { findMany: (a: unknown) => Promise<{ id: string; visualHint: string | null }[]> } }).material.findMany({
+        where: { id: { in: allMatIds } },
+      });
+      for (const m of mats as unknown as { id: string; visualHint: string | null }[]) hintById.set(m.id, m.visualHint ?? null);
+    } catch {}
+  }
 
   // Prepare per-tier hashes and prompts
   const tierMeta = new Map<
@@ -106,14 +122,15 @@ export async function generateOptionRenders(
       itemName: it.itemName,
       category: it.category ?? "عام",
       unit: (it as unknown as { unit?: string }).unit ?? "وحدة",
+      visualHint: hintById.get((it as unknown as { materialId?: string | null }).materialId ?? "") ?? null,
     }));
     const proofHash = computeProofHash(items, roomType, tier);
-    const promptSnapshot = buildRenderPrompt(items, roomType, tier, styleTags);
+    const promptSnapshot = buildRenderPrompt(items, roomType, tier, styleTags, contractorNotes);
     const promptHash = hashRenderInput(items, roomType, tier);
     tierMeta.set(tier, { items, promptHash, promptSnapshot, proofHash, optionId: opt.id, tier });
   }
 
-  // Clean previous tiered renders for this estimate (broader fallback for mock compatibility)
+  // Clean previous tiered renders for this estimate
   try {
     // Try tier-filtered delete (real Prisma supports `in`)
     const prAny = prisma as unknown as {
@@ -125,15 +142,6 @@ export async function generateOptionRenders(
         await prAny.estimateRender.deleteMany({
           where: { estimateId, tier: { in: HERO_TIERS } } as unknown as Record<string, unknown>,
         });
-        // Also fallback: ensure mock cleans — if still renders remain with tier, delete all for estimate
-        // Check remaining count for mock compatibility
-        try {
-          const remaining = await (prAny.estimateRender.findMany as unknown as ((a: unknown) => Promise<unknown[]>))?.({ where: { estimateId } } as unknown as Record<string, unknown>);
-          // If mock didn't respect `in`, remaining will still have tiered renders -> clean all
-          if (Array.isArray(remaining) && (remaining as unknown as { tier: string | null }[]).some((r) => r.tier && HERO_TIERS.includes(r.tier as Tier))) {
-            await prAny.estimateRender.deleteMany({ where: { estimateId } });
-          }
-        } catch {}
       } catch {
         // Fallback to broader delete
         await prAny.estimateRender.deleteMany({ where: { estimateId } });
@@ -172,8 +180,23 @@ export async function generateOptionRenders(
   revalidatePath(`/estimates/${estimateId}`);
   revalidatePath(`/estimates/${estimateId}/quote`);
 
-  // Sequential loop with rate-limit respect
-  const provider = getAiProvider();
+  // Sequential loop — OpenRouter Seedream ($0.035/image)
+  let provider: ReturnType<typeof getImageProvider>;
+  try {
+    provider = getImageProvider();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    // mark all pending as failed with key error
+    for (const pr of pendingRenders) {
+      try {
+        await (prisma as unknown as { estimateRender: { update: (a: unknown) => Promise<unknown> } }).estimateRender.update({
+          where: { id: pr.id },
+          data: { status: "failed", error: msg.slice(0, 500), renderedAt: new Date() },
+        });
+      } catch {}
+    }
+    return { ok: false as const, error: msg.slice(0, 500) };
+  }
   let doneCount = 0;
 
   for (let idx = 0; idx < pendingRenders.length; idx++) {
@@ -202,7 +225,6 @@ export async function generateOptionRenders(
       const photoInput: PhotoInput = { data: buf.toString("base64"), mimeType: mime };
 
       let result: { imageBase64: string; mimeType: string; model: string } | undefined;
-      let wasFallback = false;
 
       try {
         result = await provider.render({
@@ -211,83 +233,21 @@ export async function generateOptionRenders(
           roomType,
           tier: pr.tier,
           styleTags,
+          contractorNotes,
         });
       } catch (e) {
-        if (isQuotaError(e)) {
-          // Try OpenRouter fallback first
-          const fallback = getFallbackProvider();
-          let fallbackSucceeded = false;
-          if (fallback) {
-            try {
-              result = await fallback.render({
-                basePhoto: photoInput,
-                items: meta.items,
-                roomType,
-                tier: pr.tier,
-                styleTags,
-              });
-              fallbackSucceeded = true;
-            } catch (e2) {
-              if (!isQuotaError(e2)) {
-                const msg2 = e2 instanceof Error ? e2.message : String(e2);
-                await (prisma as unknown as { estimateRender: { update: (a: unknown) => Promise<unknown> } }).estimateRender.update({
-                  where: { id: pr.id },
-                  data: {
-                    status: "failed",
-                    error: msg2.slice(0, 500),
-                    renderedAt: new Date(),
-                    model: (fallback as unknown as { name: string }).name,
-                  },
-                });
-                continue;
-              }
-              // quota again -> try mock
-            }
-          }
-          if (!fallbackSucceeded) {
-            try {
-              const { MockProvider } = await import("@/lib/ai/mock");
-              const mock = new MockProvider();
-              result = await mock.render({
-                basePhoto: photoInput,
-                items: meta.items,
-                roomType,
-                tier: pr.tier,
-                styleTags,
-              });
-              (result as unknown as { model: string }).model = `mock-fallback:quota`;
-              wasFallback = true;
-            } catch (fbErr) {
-              const fbMsg = fbErr instanceof Error ? fbErr.message : String(fbErr);
-              await (prisma as unknown as { estimateRender: { update: (a: unknown) => Promise<unknown> } }).estimateRender.update({
-                where: { id: pr.id },
-                data: {
-                  status: "failed",
-                  error: `تجاوزت الحصة المجانية — فشل حتى الوضع الاحتياطي: ${fbMsg.slice(0, 200)}`,
-                  renderedAt: new Date(),
-                  model: (provider as unknown as { name: string }).name,
-                },
-              });
-              continue;
-            }
-          }
-        } else {
-          const msg = e instanceof Error ? e.message : String(e);
-          const friendly =
-            msg.includes("Gemini") && msg.includes("error")
-              ? `تعذّر التوليد (${msg.slice(0, 220)}) — حاول مجددًا أو اعمل دون AI`
-              : msg;
-          await (prisma as unknown as { estimateRender: { update: (a: unknown) => Promise<unknown> } }).estimateRender.update({
-            where: { id: pr.id },
-            data: {
-              status: "failed",
-              error: friendly.slice(0, 500),
-              renderedAt: new Date(),
-              model: (provider as unknown as { name: string }).name,
-            },
-          });
-          continue;
-        }
+        const msg = e instanceof Error ? e.message : String(e);
+        const friendly = isQuotaError(e) ? msg.slice(0, 500) : msg;
+        await (prisma as unknown as { estimateRender: { update: (a: unknown) => Promise<unknown> } }).estimateRender.update({
+          where: { id: pr.id },
+          data: {
+            status: "failed",
+            error: friendly.slice(0, 500),
+            renderedAt: new Date(),
+            model: (provider as unknown as { name: string }).name,
+          },
+        });
+        continue;
       }
 
       if (!result) {
@@ -311,7 +271,7 @@ export async function generateOptionRenders(
           renderPath: renderRel,
           model: result.model,
           renderedAt: new Date(),
-          error: wasFallback ? "وضع احتياطي: الحصة المجانية انتهت — عُرضت الصورة الأصلية مؤقتًا" : null,
+          error: null,
         },
       });
       doneCount++;

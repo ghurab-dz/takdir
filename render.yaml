@@ -13,9 +13,9 @@ services:
         sync: false
       - key: DATABASE_URL_UNPOOLED
         sync: false
-      - key: GEMINI_API_KEY
+      - key: OPENROUTER_API_KEY
         sync: false
-      # Optional:
-      # - key: GEMINI_MODEL
-      #   value: gemini-3.6-flash
-      #   sync: false
+      - key: OPENROUTER_MODEL
+        sync: false
+      - key: OPENROUTER_IMAGE_MODEL
+        sync: false

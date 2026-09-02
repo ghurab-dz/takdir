@@ -121,9 +121,9 @@ export default async function EstimateReviewPage({
       {hasOptions ? (
         <>
           <SectionHeader
-            eyebrow="استشارة — 3 خيارات"
-            title={`${estimate.clientName || estimate.roomType || "غرفة"} — اختر المستوى`}
-            hint="اعرض 3 بطاقات على الزبون: اقتصادي / متوازن / ممتاز — كل بطاقة بصورتها النهائية وسعرها من كتالوجك فقط. اعتمد خيارًا ثم راجع واطبع."
+            eyebrow={options.length === 1 ? "تصميمك جاهز" : "استشارة — خيارات"}
+            title={options.length === 1 ? `${estimate.clientName || estimate.roomType || "غرفة"} — تصميم وسعر` : `${estimate.clientName || estimate.roomType || "غرفة"} — اختر المستوى`}
+            hint={options.length === 1 ? "تصميم واحد واقعي + سعره من كتالوجك — راجع الصورة والجدول، اعتمد واطبع." : "اعرض الخيارات على الزبون — كل خيار بصورته النهائية وسعره من كتالوجك فقط. اعتمد خيارًا ثم راجع واطبع."}
           />
 
           {/* consultation summary */}

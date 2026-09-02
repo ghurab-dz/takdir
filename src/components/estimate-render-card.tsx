@@ -148,7 +148,7 @@ export function EstimateRenderCard({
               </>
             )}
           </button>
-          <p className="mt-2 text-center text-[11px] font-medium text-ink-faint">يستخدم Gemini الطبقة المجانية — قد تتأخر أول صورة ثوانٍ</p>
+          <p className="mt-2 text-center text-[11px] font-medium text-ink-faint">يستخدم OpenRouter — قد تتأخر أول صورة ثوانٍ</p>
         </div>
       </div>
     );
@@ -194,7 +194,7 @@ export function EstimateRenderCard({
           <div className="mb-3 flex gap-2 rounded-xl border border-ochre/20 bg-ochre-soft px-3 py-2.5 text-xs leading-relaxed text-ochre-deep">
             <span aria-hidden className="mt-0.5">⚠</span>
             <span>
-              وضع احتياطي: تجاوزت الحصة المجانية لـ Gemini — عُرضت الصورة الأصلية مؤقتًا بدل المعاينة المولدة. احذف <code className="rounded bg-white px-1 py-0.5 text-[11px]">GEMINI_API_KEY</code> من <code>.env</code> للعمل دون AI، أو حاول بعد دقائق.
+              وضع احتياطي: تجاوزت الحصة المجانية لـ OpenRouter — عُرضت الصورة الأصلية مؤقتًا بدل المعاينة المولدة. تحقق من رصيد <code className="rounded bg-white px-1 py-0.5 text-[11px]">OPENROUTER_API_KEY</code> أو حاول بعد دقائق.
             </span>
           </div>
         )}

@@ -27,9 +27,9 @@ function IconLayers(props: React.SVGProps<SVGSVGElement>) {
 export default async function DashboardPage() {
   const contractor = await ensureDefaultContractor();
   const [estimates, activeItems] = await Promise.all([
-    prisma.estimate.findMany({
+    (prisma as unknown as { estimate: { findMany: (a: unknown) => Promise<any[]> } }).estimate.findMany({
       where: { contractorId: contractor.id },
-      include: { items: true },
+      include: { items: true, options: { include: { items: true } } } as any,
       orderBy: { createdAt: "desc" },
       take: 30,
     }),
@@ -45,7 +45,7 @@ export default async function DashboardPage() {
       <SectionHeader
         eyebrow="لوحة الاستشارات"
         title={`أهلًا، ${contractor.name}`}
-        hint="كل استشاراتك الأخيرة. أنشئ استشارة جديدة بصور الغرفة والقياسات — احصل على 3 خيارات مسعّرة ومرئية."
+        hint="كل تصاميمك. أضف صور الغرفة وقل ماذا تريد (صوت أو كتابة) — تحصل على تصميم واحد واقعي وسعره فوراً."
       />
 
       {needsSetup && (
@@ -113,8 +113,8 @@ export default async function DashboardPage() {
           </span>
           <div className="text-center">
             <div className="text-sm font-extrabold">استشارة جديدة</div>
-            <div className="mt-0.5 hidden text-xs font-medium text-teal/80 sm:block">3 خيارات مسعّرة ومرئية</div>
-            <div className="mt-0.5 text-xs font-medium text-teal/80 sm:hidden">صور • قياس • 3 خيارات</div>
+            <div className="mt-0.5 hidden text-xs font-medium text-teal/80 sm:block">صورة + وصف = تصميم وسعر</div>
+            <div className="mt-0.5 text-xs font-medium text-teal/80 sm:hidden">صورة + وصف</div>
           </div>
         </Link>
       </div>
@@ -140,8 +140,9 @@ export default async function DashboardPage() {
             <span className="text-xs font-bold text-ink-faint">{estimates.length} عرض</span>
           </div>
 
-          {estimates.map((e) => {
-            const total = e.items.reduce((s, i) => s + Number(i.lineTotal), 0);
+          {estimates.map((e: any) => {
+            const optTotal = e.options?.[0] ? Number(e.options[0].total) : null;
+            const total = e.items.length > 0 ? e.items.reduce((s: number, i: any) => s + Number(i.lineTotal), 0) : (optTotal ?? 0);
             return (
               <Link
                 key={e.id}

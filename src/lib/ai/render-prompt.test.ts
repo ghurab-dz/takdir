@@ -3,8 +3,9 @@ import { buildRenderPrompt, hashRenderInput, RENDER_SYSTEM_INSTRUCTION } from ".
 
 describe("render-prompt", () => {
   it("system instruction forbids inventing decor", () => {
-    expect(RENDER_SYSTEM_INSTRUCTION).toContain("ممنوع إضافة أثاث");
-    expect(RENDER_SYSTEM_INSTRUCTION).toContain("فقط");
+    expect(RENDER_SYSTEM_INSTRUCTION).toContain("BOLD");
+    expect(RENDER_SYSTEM_INSTRUCTION).toContain("VISIBLE");
+    expect(RENDER_SYSTEM_INSTRUCTION).toContain("photorealistic");
   });
 
   it("builds prompt with allowed list", () => {
@@ -18,12 +19,12 @@ describe("render-prompt", () => {
     expect(p).toContain("دهان جدران داخلي");
     expect(p).toContain("تركيب بلاط أرضية");
     expect(p).toContain("غرفة نوم");
-    expect(p).toContain("لا تضف");
+    expect(p).toContain("ALL walls");
   });
 
   it("handles empty items", () => {
     const p = buildRenderPrompt([], null);
-    expect(p).toContain("فارغة");
+    expect(p).toContain("general renovation");
   });
 
   it("hash is stable and order-independent", () => {

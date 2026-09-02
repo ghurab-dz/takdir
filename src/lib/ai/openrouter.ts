@@ -16,8 +16,10 @@ import type {
 } from "./types";
 
 const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "qwen/qwen2.5-vl-7b-instruct:free";
-const DEFAULT_IMAGE_MODEL = "google/gemini-2.5-flash-image:free";
+const OPENROUTER_IMAGE_ENDPOINT = "https://openrouter.ai/api/v1/images";
+// Estimation: free vision+JSON for Arabic (minimax-m3:free — currently not rate-limited, good Arabic + JSON). Image: Gemini 2.5 Flash Image (Nano Banana — cheap, reliable for renovation)
+const DEFAULT_MODEL = "minimax/minimax-m3:free";
+const DEFAULT_IMAGE_MODEL = "google/gemini-2.5-flash-image";
 
 // Hoisted regex for data URI extraction in render response
 const DATA_URI_RE = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i;
@@ -99,8 +101,12 @@ export class OpenRouterProvider implements AiProvider {
       notes?: string | null;
     };
     try {
-      // Content may be JSON string or already object? Handle both
-      parsed = typeof rawContent === "string" ? JSON.parse(rawContent) : rawContent;
+      // Content may be JSON string or already object? Handle both + strip ```json fences (minimax wraps)
+      let textToParse = typeof rawContent === "string" ? rawContent.trim() : JSON.stringify(rawContent);
+      if (textToParse.startsWith("```")) {
+        textToParse = textToParse.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+      }
+      parsed = JSON.parse(textToParse);
     } catch {
       throw new Error("OpenRouter returned invalid JSON");
     }
@@ -175,7 +181,11 @@ export class OpenRouterProvider implements AiProvider {
       notes?: string | null;
     };
     try {
-      parsed = JSON.parse(text);
+      let textToParse = text.trim();
+      if (textToParse.startsWith("```")) {
+        textToParse = textToParse.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+      }
+      parsed = JSON.parse(textToParse);
     } catch {
       throw new Error("OpenRouter returned invalid JSON");
     }
@@ -204,14 +214,55 @@ export class OpenRouterProvider implements AiProvider {
   }
 
   async render(input: RenderInput): Promise<RenderResult> {
-    const prompt = buildRenderPrompt(input.items, input.roomType, input.tier ?? null, input.styleTags ?? []);
+    const prompt = buildRenderPrompt(input.items, input.roomType, input.tier ?? null, input.styleTags ?? [], input.contractorNotes ?? null);
+    const model = getImageModel();
+
+    // Seedream uses dedicated Image API (/api/v1/images); Gemini image uses chat completions (not /images)
+    const isSeedream = model.includes("seedream");
+    if (isSeedream) {
+      const body: Record<string, unknown> = {
+        model,
+        prompt,
+        n: 1,
+      };
+      // Seedream supports image-to-image via input_references
+      body["input_references"] = [
+        { type: "image_url", image_url: { url: toImageUrl(input.basePhoto) } },
+      ];
+      const res = await fetch(OPENROUTER_IMAGE_ENDPOINT, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => "");
+        if (res.status === 429 || isQuotaMessage(bodyText)) {
+          throw new Error(`تجاوزت الحصة لـ OpenRouter Image (429). التفاصيل: ${bodyText.slice(0, 180)}`);
+        }
+        if (res.status === 401 || res.status === 403) {
+          throw new Error(`مفتاح OpenRouter غير صالح (${res.status}). تحقق من OPENROUTER_API_KEY.`);
+        }
+        throw new Error(`OpenRouter image error ${res.status}: ${bodyText.slice(0, 400)}`);
+      }
+
+      const data = await res.json();
+      // Image API returns { data: [{ b64_json, media_type }], usage: { cost } }
+      const first = (data as { data?: { b64_json?: string; media_type?: string }[] })?.data?.[0];
+      const b64 = first?.b64_json;
+      const media = first?.media_type || "image/png";
+      const mime = media.includes("png") ? "image/png" : media.includes("webp") ? "image/webp" : "image/jpeg";
+      if (b64 && typeof b64 === "string" && b64.length > 100) {
+        return { imageBase64: b64, mimeType: mime, model };
+      }
+      throw new Error(`OpenRouter image returned no data (model ${model})`);
+    }
+
+    // Fallback: chat-completions image path (for models that support image output via chat)
     const content: unknown[] = [
       { type: "image_url", image_url: { url: toImageUrl(input.basePhoto) } },
       { type: "text", text: prompt },
     ];
-
-    const model = getImageModel();
-
     const res = await fetch(OPENROUTER_ENDPOINT, {
       method: "POST",
       headers: this.headers(),
@@ -221,7 +272,7 @@ export class OpenRouterProvider implements AiProvider {
           { role: "system", content: RENDER_SYSTEM_INSTRUCTION },
           { role: "user", content },
         ],
-        temperature: 0.4,
+        temperature: 0.9,
       }),
     });
 
@@ -237,16 +288,12 @@ export class OpenRouterProvider implements AiProvider {
     }
 
     const data = await res.json();
-    // OpenAI-compat may return choices[0].message.content as string, or images array, or tool-like
-    const choice = data?.choices?.[0]?.message;
+    const choice = (data as { choices?: { message?: unknown }[] })?.choices?.[0]?.message as unknown as { images?: unknown; content?: unknown } | undefined;
     if (!choice) throw new Error(`OpenRouter render returned no image (model ${model})`);
 
-    // Try multiple shapes: images array, content string with data URI, content array
     let b64: string | undefined;
     let mime = "image/jpeg";
-
-    // Shape 1: choice.images: [{image_url:{url:"data:..."} }]
-    const images = choice.images as unknown;
+    const images = (choice as { images?: unknown }).images as unknown;
     if (Array.isArray(images) && images.length > 0) {
       const first = images[0] as { image_url?: { url?: string }; url?: string; b64_json?: string };
       const url = first?.image_url?.url ?? (first as { url?: string }).url;
@@ -262,21 +309,18 @@ export class OpenRouterProvider implements AiProvider {
         b64 = (first as { b64_json: string }).b64_json;
       }
     }
-
-    // Shape 2: content is string containing data URI or base64
     if (!b64) {
-      const content = choice.content;
-      if (typeof content === "string" && content.length > 100) {
-        // Try to find data URI inside
-        const dataUriMatch = content.match(/data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=]{100,})/i);
+      const contentVal = (choice as { content?: unknown }).content;
+      if (typeof contentVal === "string" && contentVal.length > 100) {
+        const dataUriMatch = contentVal.match(/data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=]{100,})/i);
         if (dataUriMatch) {
           mime = dataUriMatch[1];
           b64 = dataUriMatch[2];
-        } else if (BASE64_RE.test(content.trim()) && content.trim().length > 500) {
-          b64 = content.trim();
+        } else if (BASE64_RE.test(contentVal.trim()) && contentVal.trim().length > 500) {
+          b64 = contentVal.trim();
         }
-      } else if (Array.isArray(content)) {
-        for (const part of content as { type?: string; text?: string; image_url?: { url?: string } }[]) {
+      } else if (Array.isArray(contentVal)) {
+        for (const part of contentVal as { type?: string; text?: string; image_url?: { url?: string } }[]) {
           if (part.type === "image_url" && part.image_url?.url) {
             const url = part.image_url.url;
             const m = url.match(DATA_URI_RE);
@@ -297,17 +341,13 @@ export class OpenRouterProvider implements AiProvider {
         }
       }
     }
-
     if (b64 && typeof b64 === "string" && b64.length > 100) {
       return { imageBase64: b64, mimeType: mime, model };
     }
-
-    // If model returned text instead of image, surface it
-    const textPart = typeof choice.content === "string" ? choice.content : Array.isArray(choice.content) ? (choice.content as { text?: string }[]).find((p) => typeof p.text === "string")?.text : undefined;
+    const textPart = typeof (choice as { content?: unknown }).content === "string" ? (choice as { content: string }).content : Array.isArray((choice as { content?: unknown }).content) ? ((choice as { content: unknown[] }).content as { text?: string }[]).find((p) => typeof p.text === "string")?.text : undefined;
     if (textPart && textPart.length > 0) {
       throw new Error(`OpenRouter render returned no image (model ${model}). Response text: ${textPart.slice(0, 200)}`);
     }
-
     throw new Error(`OpenRouter render returned no image (model ${model})`);
   }
 }

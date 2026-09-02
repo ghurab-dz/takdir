@@ -33,7 +33,7 @@ export function QuoteRenderGallery({
     <div className="overflow-hidden rounded-xl border border-line bg-white">
       {hasFallback && (
         <div className="border-b border-ochre/20 bg-ochre-soft px-3 py-2 text-center text-xs font-bold leading-relaxed text-ochre-deep">
-          تنبيه: عُرضت الصورة الأصلية كمعاينة مؤقتة — الحصة المجانية لـ Gemini انتهت. أعد التوليد لاحقًا للحصول على معاينة مولدة مطابقة للبنود.
+          تنبيه: عُرضت الصورة الأصلية كمعاينة مؤقتة — الحصة المجانية لـ OpenRouter انتهت. أعد التوليد لاحقًا للحصول على معاينة مولدة مطابقة للبنود.
         </div>
       )}
       {/* hero slider for first angle */}

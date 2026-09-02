@@ -19,7 +19,7 @@ export interface PriceItemRow {
   isActive: boolean;
 }
 
-const CATEGORY_SUGGESTIONS = ["دهان", "بلاط", "كهرباء", "سباكة", "نجارة", "عام"];
+const CATEGORY_SUGGESTIONS = ["دهان", "بلاط", "جبس", "كهرباء", "سباكة", "نجارة", "أرضيات", "ديكور", "عام"];
 const UNIT_SUGGESTIONS = ["م²", "م.ط", "نقطة", "وحدة", "بالمقطوع"];
 
 function IconUser(props: React.SVGProps<SVGSVGElement>) {

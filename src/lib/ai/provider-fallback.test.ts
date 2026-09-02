@@ -1,68 +1,56 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 
-describe("provider fallback on quota / invalid key", () => {
-  const base64 = "a".repeat(200);
-  let origFetch: typeof fetch;
+describe("provider — OpenRouter only (no mock)", () => {
   let origEnv: string | undefined;
 
   beforeEach(() => {
-    origFetch = globalThis.fetch;
-    origEnv = process.env.GEMINI_API_KEY;
+    origEnv = process.env.OPENROUTER_API_KEY;
+    vi.resetModules();
   });
   afterEach(() => {
-    globalThis.fetch = origFetch;
-    if (origEnv === undefined) delete process.env.GEMINI_API_KEY;
-    else process.env.GEMINI_API_KEY = origEnv;
+    if (origEnv === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = origEnv;
     vi.resetModules();
   });
 
-  it("getAiProvider returns mock for AQ. invalid key (H2)", async () => {
-    process.env.GEMINI_API_KEY = process.env.TEST_GCP_API_KEY ?? "TEST_INVALID_KEY";
+  it("getAiProvider throws for invalid/missing key", async () => {
+    process.env.OPENROUTER_API_KEY = "TEST_INVALID_KEY";
     const { getAiProvider } = await import("./index");
-    const p = getAiProvider();
-    expect(p.name).toBe("mock");
+    expect(() => getAiProvider()).toThrow();
   });
 
-  it("getAiProvider returns gemini for AIza key", async () => {
-    process.env.GEMINI_API_KEY = "AIzaSyFakeValidKey12345678901234567890";
+  it("getAiProvider throws for missing key", async () => {
+    delete process.env.OPENROUTER_API_KEY;
+    const { getAiProvider } = await import("./index");
+    expect(() => getAiProvider()).toThrow();
+  });
+
+  it("getAiProvider returns openrouter for valid sk-or key", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-v1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     vi.resetModules();
     const { getAiProvider } = await import("./index");
     const p = getAiProvider();
-    expect(p.name).toBe("gemini");
+    expect(p.name).toBe("openrouter");
   });
 
-  it("gemini 429 isQuota → fallback mock would be used (renders.ts logic)", async () => {
-    globalThis.fetch = vi.fn(async () =>
-      new Response(JSON.stringify({ error: { code: 429, message: "quota exceeded" } }), {
-        status: 429,
-      })
-    ) as unknown as typeof fetch;
-    const { GeminiProvider } = await import("./gemini");
-    const { MockProvider } = await import("./mock");
-    const g = new GeminiProvider("AIzaFakeKeyForTest1234567890");
-    let err: Error | null = null;
-    try {
-      await g.render({
-        basePhoto: { data: base64, mimeType: "image/jpeg" },
-        items: [{ itemName: "دهان", category: "دهان", unit: "م²" }],
-        roomType: null,
-      });
-    } catch (e) {
-      err = e as Error;
-    }
-    expect(err).not.toBeNull();
-    const msg = err!.message;
-    const isQuota =
-      msg.includes("429") || msg.includes("الحصة") || msg.toLowerCase().includes("quota");
-    expect(isQuota).toBe(true);
-    // fallback would trigger MockProvider
-    const mock = new MockProvider();
-    const res = await mock.render({
-      basePhoto: { data: base64, mimeType: "image/jpeg" },
-      items: [{ itemName: "دهان", category: "دهان", unit: "م²" }],
-      roomType: null,
-    });
-    expect(res.imageBase64).toBe(base64);
-    expect(res.model).toBe("mock");
+  it("getImageProvider throws for missing key", async () => {
+    delete process.env.OPENROUTER_API_KEY;
+    const { getImageProvider } = await import("./index");
+    expect(() => getImageProvider()).toThrow();
+  });
+
+  it("getImageProvider returns openrouter for valid key (seedream)", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-v1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    vi.resetModules();
+    const { getImageProvider } = await import("./index");
+    const p = getImageProvider();
+    expect(p.name).toBe("openrouter");
+  });
+
+  it("isQuotaError detects 429/quota", async () => {
+    const { isQuotaError } = await import("./index");
+    expect(isQuotaError(new Error("429 quota exceeded"))).toBe(true);
+    expect(isQuotaError(new Error("تجاوزت الحصة"))).toBe(true);
+    expect(isQuotaError(new Error("some other error"))).toBe(false);
   });
 });

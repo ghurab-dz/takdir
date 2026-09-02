@@ -1,63 +1,59 @@
-// Render prompt — locked to quote (quote-locked visual proof).
-// CRITICAL: image must ONLY change surfaces listed in the quote.
+// Render prompt — INSPIRING single design: bold full-room transform, contractor color OVERRIDES tier.
+export const RENDER_SYSTEM_INSTRUCTION = `You are a professional interior renovation photo editor for Algeria. Transform the ORIGINAL room photo into a FINISHED showroom.
 
-export const RENDER_SYSTEM_INSTRUCTION = `أنت محرر صور جراحي (surgical photo editor) لورشة تشطيب في الجزائر. مهمتك تحرير صورة الغرفة الأصلية لتُظهر النتيجة النهائية *فقط* للبنود المدرجة في عرض السعر.
-
-قواعد صارمة لا تُخرق:
-
-1. غيّر فقط الأسطح المذكورة في "قائمة التعديلات المسموحة". كل سطح غير مذكور يجب أن يبقى مطابقًا للأصل تمامًا (نفس الأثاث، الإضاءة، الزوايا، الأبواب، النوافذ).
-2. لكل بند مسموح، طبّق خامة/لون عامّة ومعقولة تناسب اسمه العربي (مثلاً "دهان جدران داخلي" → أعد طلاء الجدران فقط بلون أبيض مطفي نظيف، "تركيب بلاط أرضية" → بلاط أرضية فاتح محايد). لا تخترع ديكورًا إضافيًا.
-3. ممنوع إضافة أثاث، نباتات، لوحات، أو تغيير ديكور. ممنوع تغيير هندسة الغرفة (shape) أو زاوية الكاميرا.
-4. الإضاءة تبقى طبيعية وواقعية، لا مبالغة.
-5. إن كانت القائمة فارغة، أعد الصورة الأصلية دون تغيير.
-6. النتيجة صورة واحدة واقعية فقط، بدون نص داخل الصورة.`;
+ABSOLUTE RULES — FAILURE IF VIOLATED:
+1. BOLD, VISIBLE COLOR/MATERIAL CHANGE IS MANDATORY — repaint ALL walls with a SOLID, UNIFORM, VIVID color and retile ALL floor with a CLEARLY NEW pattern. Before vs after must be INSTANTLY obvious. Subtle/washed-out edits = FAILURE.
+2. CONTRACTOR COLOR REQUEST IS HIGHEST PRIORITY — if contractor says "red / ahmar / beige / blue" you MUST paint that exact color vividly on the appropriate surface, even if it conflicts with tier description. Tier defines QUALITY (ceramic vs porcelain vs marble), NOT color when a color is requested.
+3. Keep geometry, doors, windows, furniture positions exactly as original. Only surface finishes change. Do not add/remove furniture.
+4. Lighting natural, finishes clearly visible.
+5. Output ONE photorealistic image only, no text.`;
 
 import type { Tier } from "./types";
 
-const TIER_PALETTE: Record<Tier, string> = {
-  economy: "سيراميك 30×30 أبيض مطفي — تشطيب اقتصادي عملي",
-  mid: "بورسلان 60×60 بيج قابل للغسل — تشطيب متوازن أنيق",
-  premium: "رخام 80×80 + دهان فاخر + إضاءة مخفية بسيطة — تشطيب ممتاز راقٍ",
+const TIER_QUALITY: Record<Tier, string> = {
+  economy: "ECONOMY QUALITY — budget ceramic 30x30, matte paint, simple finish",
+  mid: "MID QUALITY — balanced porcelain 60x60, washable, good finish",
+  premium: "PREMIUM QUALITY — luxury polished marble 80x80, premium paint + hidden LED accent, high-end",
 };
 
 export function buildRenderPrompt(
-  items: { itemName: string; category: string }[],
+  items: { itemName: string; category: string; visualHint?: string | null }[],
   roomType: string | null,
   tier?: Tier | string | null,
   styleTags?: string[] | null,
+  contractorNotes?: string | null,
 ): string {
-  if (items.length === 0) {
-    const base = `قائمة التعديلات المسموحة: (فارغة — لا تغيّر أي شيء، أعد الصورة كما هي)\nنوع الغرفة: ${roomType ?? "غير محدد"}`;
-    if (!tier) return base;
-    const palette = TIER_PALETTE[tier as Tier] ?? "";
-    const styleBlock = styleTags && styleTags.length > 0 ? `\nالنمط المطلوب: ${styleTags.join("، ")}` : "";
-    return `${base}\nالمستوى المطلوب: ${tier} — ${palette}${styleBlock}`;
-  }
-  const list = items.map((i) => `- "${i.itemName}" (الصنف: ${i.category})`).join("\n");
-  let prompt = `قائمة التعديلات المسموحة (مغلقة — لا تخرج عنها):
+  const list =
+    items.length > 0
+      ? items
+          .map((i) => `- "${i.itemName}" (category: ${i.category}${i.visualHint ? ` — FINISH: ${i.visualHint}` : ""})`)
+          .join("\n")
+      : "(general renovation — transform all walls & floor coherently)";
+
+  let prompt = `Design guidance (materials to use — FINISH field is the exact color/material to apply vividly):
 ${list}
 
-نوع الغرفة: ${roomType ?? "غير محدد"}
+Room type: ${roomType ?? "unknown"}
 
-المطلوب: عدّل الصورة الأصلية المرفقة لتُظهر الغرفة بعد تنفيذ هذه البنود فقط. كل عنصر غير مذكور في القائمة يبقى كما هو في الأصل تمامًا. لا تضف أي عمل غير مذكور.
-
-تعليمات إضافية:
-- حافظ على زاوية الكاميرا وهندسة الجدران والأبواب/النوافذ.
-- الخامات تكون عامة ومحايدة وواقعية (لا ألوان صارخة عشوائية).
-- لا تضف أثاثًا أو ديكورًا جديدًا.
-- أخرج صورة نهائية واقعية واحدة فقط.`;
+TASK: Edit the attached ORIGINAL photo into FINISHED renovation. Repaint ALL walls and retile ALL floor. Each item FINISH must be applied EXACTLY as written — e.g., if FINISH says "ahmar" paint walls SOLID RED, if "beige porcelain" use beige porcelain.
+Requirements:
+- ALL walls: solid uniform vivid color (not patchy, not subtle)
+- ALL floor: clearly new tile/marble with visible pattern/grout
+- BOLD, photorealistic, showroom lit
+- Keep camera angle and furniture, no new decor
+- Output ONE final image only.`;
 
   if (tier) {
-    const palette = TIER_PALETTE[tier as Tier] ?? tier;
-    prompt += `\n\nالمستوى المطلوب: ${tier} — ${palette}`;
-    if (tier === "economy") prompt += "\nلوحة المستوى: سيراميك 30×30 أبيض";
-    else if (tier === "mid") prompt += "\nلوحة المستوى: بورسلان 60×60 بيج";
-    else if (tier === "premium") prompt += "\nلوحة المستوى: رخام 80×80 + دهان فاخر";
+    const q = TIER_QUALITY[tier as Tier] ?? tier;
+    prompt += `\n\nTier quality hint: ${tier} — ${q} (QUALITY only — color comes from FINISH / contractor request above)`;
   }
   if (styleTags && styleTags.length > 0) {
-    prompt += `\nالنمط المطلوب: ${styleTags.join("، ")}`;
+    prompt += `\nStyle: ${styleTags.join(", ")}`;
   }
-
+  if (contractorNotes && contractorNotes.trim()) {
+    prompt += `\n\n*** CONTRACTOR EXPLICIT REQUEST (TOP PRIORITY — MUST OBEY COLOR/MATERIAL): """${contractorNotes.trim()}""" — THIS OVERRIDES ANY OTHER COLOR. If it says ahmar/red, walls MUST be RED. If it says beige, floor MUST be beige. Apply vividly and uniformly.`;
+  }
+  prompt += `\n\nFINAL VERIFICATION: If the image looks almost identical to original, or the requested color (e.g., red) is not clearly visible on walls/floor, you FAILED. Make the change OBVIOUS.`;
   return prompt;
 }
 
@@ -72,7 +68,6 @@ export function hashRenderInput(
     .sort()
     .join("|");
   const raw = tier ? `${normalized}::${roomType ?? ""}::${tier}` : `${normalized}::${roomType ?? ""}`;
-  // Simple djb2-like hash to hex (no crypto dep needed for staleness check)
   let h = 5381;
   for (let i = 0; i < raw.length; i++) h = (h * 33) ^ raw.charCodeAt(i);
   return (h >>> 0).toString(16).padStart(8, "0");

@@ -1,40 +1,41 @@
-// AI provider factory — swap providers here, the rest of the app never changes.
+// AI provider factory — OpenRouter only (no mock)
+// Estimation: free vision model (Gemma 4) — Image: Seedream 5.0-lite (paid quality)
 
-import { GeminiProvider } from "./gemini";
-import { MockProvider } from "./mock";
 import { OpenRouterProvider } from "./openrouter";
 import type { AiProvider } from "./types";
 
-function isValidGeminiKey(key: string): boolean {
-  const k = key.trim();
-  // Gemini Studio keys are AIza... and >=35 chars; "placeholder"/"YOUR_" etc are invalid
-  if (!k || k.includes("placeholder") || k.includes("YOUR_") || k.length < 20) return false;
-  // Real keys start with AIza — the AQ... key in .env is not Gemini (H2)
-  // Accept any 30+ char key but warn if not AIza, still allow — fallback will handle 429
-  // For MVP: treat clearly invalid short/AQ key as mock to avoid 429 storm
-  if (k.startsWith("AQ.")) return false;
-  return true;
-}
-
 export function getAiProvider(): AiProvider {
-  const key = process.env.GEMINI_API_KEY;
-  if (key && isValidGeminiKey(key)) return new GeminiProvider(key.trim());
-  if (key && key.trim() !== "" && !isValidGeminiKey(key)) {
-    console.warn("[ai] GEMINI_API_KEY looks invalid (not AIza…), falling back to mock — check .env");
+  const oKey = process.env.OPENROUTER_API_KEY;
+  if (!oKey || !isValidOpenRouterKey(oKey)) {
+    throw new Error(
+      "OPENROUTER_API_KEY غير موجود أو غير صالح — أضف مفتاح OpenRouter صالح (sk-or-v1-...) في .env ثم أعد تشغيل الخادم"
+    );
   }
-  return new MockProvider();
+  return new OpenRouterProvider(oKey.trim());
 }
 
 function isValidOpenRouterKey(key: string): boolean {
   const k = key.trim();
-  if (!k || k.includes("placeholder") || k.includes("YOUR_") || k.length < 20) return false;
+  const lower = k.toLowerCase();
+  if (!k || lower.includes("placeholder") || lower.includes("your_") || k.length < 20) return false;
+  if (lower.includes("replace_with_real_key")) return false;
   return true;
 }
 
 export function getFallbackProvider(): AiProvider | null {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (key && isValidOpenRouterKey(key)) return new OpenRouterProvider(key.trim());
+  // No fallback — OpenRouter is the only provider (free estimation + paid image)
   return null;
+}
+
+export function getImageProvider(): AiProvider {
+  // Same OpenRouter provider but will use image model (Seedream) via OPENROUTER_IMAGE_MODEL
+  const oKey = process.env.OPENROUTER_API_KEY;
+  if (!oKey || !isValidOpenRouterKey(oKey)) {
+    throw new Error(
+      "OPENROUTER_API_KEY غير موجود أو غير صالح — الصور تحتاج مفتاح OpenRouter (sk-or-v1-...) في .env"
+    );
+  }
+  return new OpenRouterProvider(oKey.trim());
 }
 
 export function isQuotaError(e: unknown): boolean {
@@ -49,8 +50,7 @@ export function isQuotaError(e: unknown): boolean {
 }
 
 /**
- * Helper: try primary provider, on quota (429) fallback to OpenRouter, then mock.
- * Keeps existing getAiProvider() semantics for callers that handle fallback themselves.
+ * Helper: try primary provider, propagate quota errors as-is (no mock fallback).
  */
 export async function withFallback<T>(primary: AiProvider, fn: (p: AiProvider) => Promise<T>): Promise<T> {
   try {
@@ -59,17 +59,11 @@ export async function withFallback<T>(primary: AiProvider, fn: (p: AiProvider) =
     if (!isQuotaError(e)) throw e;
     const fallback = getFallbackProvider();
     if (fallback) {
-      try {
-        return await fn(fallback);
-      } catch (e2) {
-        if (!isQuotaError(e2)) throw e2;
-        // fall through to mock
-      }
+      return await fn(fallback);
     }
-    const mock = new MockProvider();
-    return await fn(mock);
+    throw e;
   }
 }
 
-export { isValidGeminiKey, isValidOpenRouterKey };
+export { isValidOpenRouterKey };
 export type { AiProvider } from "./types";

@@ -3,7 +3,7 @@
 import { config as loadEnv } from "dotenv";
 import { defineConfig } from "prisma/config";
 
-loadEnv({ path: ".env" }); // base values (e.g. GEMINI_API_KEY placeholder)
+loadEnv({ path: ".env" }); // base values (e.g. OPENROUTER_API_KEY placeholder)
 loadEnv({ path: ".env.local", override: true }); // Neon-managed, takes precedence
 
 export default defineConfig({

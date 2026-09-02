@@ -30,14 +30,14 @@ export async function DemoBanner() {
               <span className="chip chip-teal hidden sm:inline-flex">demo</span>
             </div>
             <p className="mt-1 text-xs leading-relaxed text-ink-soft">
-              قائمة أسعار ابتدائية (<span className="font-bold text-ink">13</span> بند) جاهزة كقالب — عدّل الأسعار لأسعارك الحقيقية ثم أنشئ أول تقدير. اللوحة فارغة حتى الإنشاء.
+              قائمة أسعار ابتدائية (<span className="font-bold text-ink">58</span> بند) جاهزة كقالب — 9 أصناف (دهان/بلاط/جبس/كهرباء/سباكة/نجارة/أرضيات/ديكور/عام) مع 174 خامة ×3 درجات — عدّل الأسعار لأسعارك الحقيقية ثم أنشئ أول تقدير. اللوحة فارغة حتى الإنشاء.
               {" "}بدون قاعدة بيانات — محفوظة في <span className="font-mono text-[11px] bg-white border border-line px-1 py-0.5 rounded">data/mock-db.json</span>
               {estimateCount > 0 && (
                 <> — يوجد <span className="font-bold text-ink">{estimateCount}</span> تقدير حاليًا.</>
               )}
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <span className="chip bg-white border-line text-ink-soft">✓ 13 بند مسعّر (قالب قابل للتعديل)</span>
+              <span className="chip bg-white border-line text-ink-soft">✓ 58 بند مسعّر (قالب قابل للتعديل)</span>
               <span className="chip bg-white border-line text-ink-soft">✓ واتساب/طباعة جاهز</span>
               <span className="chip bg-white border-line text-ink-soft">✓ ابدأ فارغًا — CTA أول تقدير</span>
             </div>

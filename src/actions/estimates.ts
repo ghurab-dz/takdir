@@ -68,11 +68,11 @@ export async function createEstimate(
   _prev: CreateEstimateState,
   formData: FormData,
 ): Promise<CreateEstimateState> {
-  // Server guard: wizard must be on final step (5 — ملاحظات). Bypass via Enter/requestSubmit still hits server,
-  // so enforce here as defense-in-depth. _step is sent as hidden input from the wizard.
+  // Relaxed guard: new flow is 1-step (photos+prompt), old flow is 5-step. Allow both.
   const stepRaw = String(formData.get("_step") ?? "").trim();
-  if (stepRaw && stepRaw !== "5") {
-    return { error: "أكمل جميع الخطوات حتى ملاحظات المقاول قبل الإرسال" };
+  if (stepRaw && stepRaw !== "1" && stepRaw !== "5") {
+    // incomplete wizard step (old 5-step flow) — block early submission
+    if (["2","3","4"].includes(stepRaw)) return { error: "أكمل جميع الخطوات حتى النهاية قبل الإرسال" };
   }
 
   const description = String(formData.get("description") ?? "").trim();
@@ -103,8 +103,13 @@ export async function createEstimate(
     .getAll("photos")
     .filter((f): f is File => typeof f === "object" && "arrayBuffer" in f && (f as File).size > 0);
 
-  if (files.length === 0 && !description) {
-    return { error: "أضف صورة واحدة على الأقل أو وصفًا نصيًا للغرفة" };
+  // Single-design UX: photos + prompt is core. Require at least 1 photo and a prompt.
+  const promptText = (description || contractorNotes || "").trim();
+  if (files.length === 0) {
+    return { error: "أضف صورة واحدة على الأقل" };
+  }
+  if (!promptText) {
+    return { error: "اكتب وصف ما تريد تجديده أو استخدم الميكروفون" };
   }
   if (files.length > MAX_PHOTOS) {
     return { error: `الحد الأقصى ${MAX_PHOTOS} صور` };
@@ -189,11 +194,21 @@ export async function createEstimate(
 
   if (materials.length === 0) {
     // Fallback to PriceItem synthetic grade=mid
-    const pricelist = await prisma.priceItem.findMany({
+    let pricelist = await prisma.priceItem.findMany({
       where: { contractorId: contractor.id, isActive: true },
     });
     if (pricelist.length === 0) {
-      return { error: "قائمة أسعارك فارغة — أضف بندًا واحدًا على الأقل من صفحة «قائمة الأسعار» أو «المواد»" };
+      // Zero-config: auto-seed starter catalog so first estimate works with 0 setup
+      try {
+        const { DEFAULT_PRICE_ITEMS } = await import("@/lib/seed");
+        for (const it of DEFAULT_PRICE_ITEMS.slice(0, 8)) {
+          try { await prisma.priceItem.create({ data: { contractorId: contractor.id, category: it.category, itemName: it.itemName, unit: it.unit, unitPrice: it.unitPrice } as never }); } catch {}
+        }
+        pricelist = await prisma.priceItem.findMany({ where: { contractorId: contractor.id, isActive: true } });
+      } catch {}
+      if (pricelist.length === 0) {
+        return { error: "قائمة أسعارك فارغة — أضف بندًا واحدًا على الأقل من صفحة «قائمة الأسعار» أو «المواد»" };
+      }
     }
     materials = pricelist.map((p) => ({
       id: p.id,
@@ -224,7 +239,12 @@ export async function createEstimate(
     areaM2: computedArea,
   };
 
-  const provider = getAiProvider();
+  let provider: ReturnType<typeof getAiProvider>;
+  try {
+    provider = getAiProvider();
+  } catch (e) {
+    return { error: e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500) };
+  }
   let result;
   try {
     result = await provider.generateOptions({
@@ -244,7 +264,9 @@ export async function createEstimate(
       error:
         e instanceof Error && (e.message.includes("الحصة") || e.message.includes("429") || e.message.toLowerCase().includes("quota"))
           ? e.message.slice(0, 500)
-          : "تعذّر تحليل الصور الآن. تحقق من مفتاح GEMINI_API_KEY أو أعد المحاولة بعد قليل.",
+          : e instanceof Error
+            ? e.message.slice(0, 500)
+            : "تعذّر تحليل الصور الآن. تحقق من مفتاح OPENROUTER_API_KEY أو أعد المحاولة بعد قليل.",
     };
   }
 
@@ -274,13 +296,26 @@ export async function createEstimate(
 
   const optionPayloads: OptionWithLines[] = [];
 
-  // Ensure tiers sorted economy->mid->premium for stable creation
+  // Single-design UX: pick ONE tier that best matches prompt + requested budgetTier
+  // Infer tier from explicit budgetTier or prompt keywords
+  function inferTierFromPrompt(text: string, explicit: Tier | null): Tier {
+    if (explicit && VALID_TIERS.has(explicit)) return explicit;
+    const t = (text || "").toLowerCase();
+    if (t.includes("اقتصاد") || t.includes("رخيص") || t.includes("budget") || t.includes("economy")) return "economy";
+    if (t.includes("فاخر") || t.includes("ممتاز") || t.includes("رخام") || t.includes("لوكس") || t.includes("premium") || t.includes("فخم")) return "premium";
+    return "mid";
+  }
+  const targetTier = inferTierFromPrompt(promptText + " " + (budgetTier ?? ""), budgetTier);
+  // Sort and pick the option matching targetTier; fallback to first available
   const tierOrder: Record<Tier, number> = { economy: 0, mid: 1, premium: 2 };
   const sortedOptions = [...result.options].sort((a, b) => (tierOrder[a.tier] ?? 99) - (tierOrder[b.tier] ?? 99));
+  const chosen = sortedOptions.find((o) => (o.tier as Tier) === targetTier) ?? sortedOptions[0];
+  const singleOptions = chosen ? [chosen] : sortedOptions.slice(0, 1);
 
-  for (const opt of sortedOptions) {
-    const tier = (opt.tier as Tier) || "mid";
-    if (!VALID_TIERS.has(tier)) continue;
+  for (const opt of singleOptions) {
+    const tier = (opt.tier as Tier) || targetTier;
+    // Single-design: allow ANY material from catalog (not just that tier) so prompt colors aren't blocked by tier
+    // We still keep tier label for visual palette, but matching uses full pool
     const matsForTier = materials
       .filter((m) => m.grade === tier)
       .map((m) => ({
@@ -290,8 +325,9 @@ export async function createEstimate(
         unitPrice: m.unitPrice,
         category: m.category,
       }));
-    // If no materials for this tier (should not happen after seed), fallback to all
-    const tierPool = matsForTier.length > 0 ? matsForTier : allMaterialsForFallback;
+    // Single-design: use FULL catalog so prompt like "رخام" works even if targetTier=mid
+    const tierPool = allMaterialsForFallback; // was tier-specific, now full for flexibility
+    // keep matsForTier for reference if needed but not used for filtering
 
     // Extracted items from AI for this tier
     const extractedForTier = (opt.items ?? []).map((it) => ({

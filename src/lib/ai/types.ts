@@ -35,6 +35,7 @@ export interface RenderItem {
   itemName: string;
   category: string;
   unit: string;
+  visualHint?: string | null;
 }
 
 export type Tier = "economy" | "mid" | "premium";
@@ -79,6 +80,7 @@ export interface RenderInput {
   roomType: string | null;
   tier?: Tier | null;
   styleTags?: string[];
+  contractorNotes?: string | null;
 }
 
 export interface RenderResult {

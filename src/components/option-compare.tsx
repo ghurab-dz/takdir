@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useTransition } from "react";
+import { useEffect, useMemo, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { selectOption } from "@/actions/options";
 import { generateOptionRenders } from "@/actions/renders";
@@ -74,6 +74,21 @@ export function OptionCompare({
     return Math.min(...sorted.map((o) => Number(o.total)));
   }, [sorted]);
 
+  const hasNoRenders = renders.length === 0;
+  const autoFired = useRef(false);
+  useEffect(() => {
+    if (sorted.length === 1 && hasNoRenders && !isPending && !autoFired.current) {
+      autoFired.current = true;
+      const t = setTimeout(() => {
+        startTransition(async () => {
+          const res = await generateOptionRenders(estimateId);
+          if (res.ok) router.refresh();
+        });
+      }, 800);
+      return () => clearTimeout(t);
+    }
+  }, [sorted.length, hasNoRenders, isPending, estimateId, router]);
+
   function handleSelect(tier: string) {
     startTransition(async () => {
       const res = await selectOption(estimateId, tier);
@@ -107,21 +122,20 @@ export function OptionCompare({
   if (sorted.length === 0) {
     return (
       <div className="card p-8 text-center">
-        <div className="text-sm font-bold text-ink-soft">لا توجد خيارات مولدة بعد</div>
-        <p className="mt-1 text-xs text-ink-faint">سيتم توليد 3 خيارات بعد تحليل الصور والوصف.</p>
+        <div className="text-sm font-bold text-ink-soft">لا يوجد تصميم بعد</div>
+        <p className="mt-1 text-xs text-ink-faint">سيتم توليد تصميم واحد بعد تحليل الصور والوصف.</p>
       </div>
     );
   }
 
-  const hasNoRenders = renders.length === 0;
 
   return (
     <div className="space-y-4">
       {hasNoRenders && (
         <div className="card p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="font-display text-sm font-extrabold text-ink">المعاينة البصرية — 3 مستويات</div>
-            <p className="mt-1 text-xs leading-relaxed text-ink-soft">لم يتم توليد الصور بعد. اضغط للتوليد — صورة واحدة لكل مستوى (اقتصادي / متوازن / ممتاز) من نفس الزاوية.</p>
+            <div className="font-display text-sm font-extrabold text-ink">المعاينة البصرية</div>
+            <p className="mt-1 text-xs leading-relaxed text-ink-soft">{sorted.length === 1 ? "لم يتم توليد الصورة بعد — اضغط للتوليد." : "لم يتم توليد الصور بعد. اضغط للتوليد."}</p>
           </div>
           <button type="button" onClick={handleRegenerate} disabled={isPending} className="btn btn-primary shrink-0 gap-2 disabled:opacity-60">
             {isPending ? (
@@ -131,7 +145,7 @@ export function OptionCompare({
               </>
             ) : (
               <>
-                <span>توليد المعاينات الثلاث</span>
+                <span>{sorted.length === 1 ? "توليد التصميم" : "توليد المعاينات"}</span>
                 <span aria-hidden>←</span>
               </>
             )}
@@ -139,7 +153,7 @@ export function OptionCompare({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className={sorted.length === 1 ? "grid grid-cols-1 gap-4 max-w-2xl mx-auto" : "grid grid-cols-1 gap-4 lg:grid-cols-3"}>
         {sorted.map((opt) => {
           const tier = opt.tier;
           const render = renders.find((r) => r.tier === tier) ?? null;
@@ -333,7 +347,7 @@ export function OptionCompare({
       </div>
 
       {sorted.length > 0 && renders.length > 0 && renders.some((r) => r.status === "pending") && (
-        <p className="text-center text-xs font-medium text-ink-faint">المعاينات تُنشأ تباعًا — قد تستغرق 36-90 ثانية للثلاثة. لا تغلق الصفحة.</p>
+        <p className="text-center text-xs font-medium text-ink-faint">{sorted.length === 1 ? "التصميم يُنشأ الآن — قد يستغرق 15-30 ثانية. لا تغلق الصفحة." : "المعاينات تُنشأ تباعًا — قد تستغرق 36-90 ثانية. لا تغلق الصفحة."}</p>
       )}
     </div>
   );
