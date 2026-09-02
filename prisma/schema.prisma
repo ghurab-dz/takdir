@@ -158,6 +158,18 @@ model EstimateRender {
   @@map("estimate_renders")
 }
 
+model StoredFile {
+  id         String   @id @default(uuid())
+  path       String   @unique // /uploads/<estimateId>/0.jpg  — also key for lookup
+  mime       String
+  data       Bytes // image bytes (Neon bytea) — persistent on Render free tier
+  estimateId String?  @map("estimate_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([estimateId])
+  @@map("stored_files")
+}
+
 enum EstimateItemSource {
   ai_extracted
   manual

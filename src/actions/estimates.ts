@@ -6,6 +6,7 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { saveStoredFile, deleteStoredFilesForEstimate } from "@/lib/file-store";
 import { ensureDefaultContractor } from "@/lib/seed";
 import { getAiProvider } from "@/lib/ai";
 import type { PhotoInput, Tier, AllowedMaterial } from "@/lib/ai/types";
@@ -154,6 +155,8 @@ export async function createEstimate(
       const ext = ALLOWED_MIME.get(f.type)!;
       const rel = `/uploads/${estimateId}/${i}.${ext}`;
       await fs.writeFile(path.join(dir, `${i}.${ext}`), buf);
+      // persistent on Render (ephemeral FS) — also save to Neon bytea
+      await saveStoredFile({ path: rel, mime: f.type, buffer: buf, estimateId }).catch(() => {});
       photoPaths.push(rel);
       photoInputs.push({ data: buf.toString("base64"), mimeType: f.type });
       i++;
@@ -590,7 +593,8 @@ export async function setEstimateStatus(estimateId: string, status: "draft" | "f
 
 export async function deleteEstimate(estimateId: string) {
   await prisma.estimate.delete({ where: { id: estimateId } });
-  // best-effort photo cleanup
+  try { await deleteStoredFilesForEstimate(estimateId); } catch {}
+  // best-effort photo cleanup (ephemeral on Render)
   const dir = path.join(process.cwd(), "public", "uploads", estimateId);
   await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
   revalidatePath("/");

@@ -4,6 +4,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { saveStoredFile, getStoredFile } from "@/lib/file-store";
 import { getImageProvider, isQuotaError } from "@/lib/ai";
 import type { PhotoInput, RenderItem, Tier } from "@/lib/ai/types";
 import { buildRenderPrompt, hashRenderInput } from "@/lib/ai/render-prompt";
@@ -214,11 +215,16 @@ export async function generateOptionRenders(
       try {
         buf = await fs.readFile(abs);
       } catch {
-        await (prisma as unknown as { estimateRender: { update: (a: unknown) => Promise<unknown> } }).estimateRender.update({
-          where: { id: pr.id },
-          data: { status: "failed", error: "تعذّر قراءة الصورة الأصلية", renderedAt: new Date() },
-        });
-        continue;
+        // Render free tier: file lost after restart → fallback to DB
+        const stored = await getStoredFile(heroPath).catch(() => null);
+        if (stored?.data) buf = stored.data;
+        else {
+          await (prisma as unknown as { estimateRender: { update: (a: unknown) => Promise<unknown> } }).estimateRender.update({
+            where: { id: pr.id },
+            data: { status: "failed", error: "تعذّر قراءة الصورة الأصلية", renderedAt: new Date() },
+          });
+          continue;
+        }
       }
 
       const mime = mimeForPath(heroPath);
@@ -262,7 +268,9 @@ export async function generateOptionRenders(
       const renderRel = `/uploads/${estimateId}/render-${pr.tier}.${ext}`;
       const renderAbs = path.join(process.cwd(), "public", renderRel.startsWith("/") ? renderRel.slice(1) : renderRel);
       await fs.mkdir(path.dirname(renderAbs), { recursive: true });
-      await fs.writeFile(renderAbs, Buffer.from(result.imageBase64, "base64"));
+      const renderBuf = Buffer.from(result.imageBase64, "base64");
+      await fs.writeFile(renderAbs, renderBuf);
+      await saveStoredFile({ path: renderRel, mime: result.mimeType, buffer: renderBuf, estimateId }).catch(() => {});
 
       await (prisma as unknown as { estimateRender: { update: (a: unknown) => Promise<unknown> } }).estimateRender.update({
         where: { id: pr.id },

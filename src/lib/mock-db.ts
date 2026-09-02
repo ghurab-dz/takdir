@@ -120,6 +120,16 @@ type Store = {
   estimateRenders: EstimateRender[];
   estimateOptions: EstimateOption[];
   estimateOptionItems: EstimateOptionItem[];
+  storedFiles: StoredFile[];
+};
+
+type StoredFile = {
+  id: string;
+  path: string;
+  mime: string;
+  data: string; // base64
+  estimateId: string | null;
+  createdAt: Date;
 };
 
 const STORE_PATH = path.join(process.cwd(), "data", "mock-db.json");
@@ -198,12 +208,13 @@ function loadStore(): Store {
           lineTotal: Number((it as unknown as { lineTotal: unknown }).lineTotal),
           materialId: (it as unknown as EstimateOptionItem).materialId ?? null,
         })),
+        storedFiles: (parsed as unknown as { storedFiles?: StoredFile[] }).storedFiles ?? [],
       };
     }
   } catch (e) {
     console.warn("[mock-db] failed to load store, using empty", e);
   }
-  return { contractors: [], priceItems: [], materials: [], estimates: [], estimateItems: [], estimateRenders: [], estimateOptions: [], estimateOptionItems: [] };
+  return { contractors: [], priceItems: [], materials: [], estimates: [], estimateItems: [], estimateRenders: [], estimateOptions: [], estimateOptionItems: [], storedFiles: [] };
 }
 
 let store: Store = loadStore();
@@ -520,6 +531,51 @@ const material = {
   },
   async count(args?: { where?: Record<string, unknown> }) {
     return store.materials.filter((m) => matchesWhere(m as unknown as Record<string, unknown>, args?.where)).length;
+  },
+};
+
+// --- storedFile ---
+const storedFile = {
+  async findUnique(args) {
+    const f = store.storedFiles.find((x) => x.path === args.where.path) ?? null;
+    if (!f) return null;
+    return { ...f, data: Buffer.from(f.data, "base64") };
+  },
+  async upsert(args) {
+    let f = store.storedFiles.find((x) => x.path === args.where.path);
+    const b64 = Buffer.isBuffer(args.create.data) ? args.create.data.toString("base64") : Buffer.from(args.create.data).toString("base64");
+    const b64u = Buffer.isBuffer(args.update.data) ? args.update.data.toString("base64") : Buffer.from(args.update.data).toString("base64");
+    if (f) {
+      f.mime = args.update.mime;
+      f.data = b64u;
+      f.estimateId = args.update.estimateId ?? null;
+    } else {
+      f = { id: require("crypto").randomUUID(), path: args.create.path, mime: args.create.mime, data: b64, estimateId: args.create.estimateId ?? null, createdAt: new Date() };
+      store.storedFiles.push(f);
+    }
+    saveStore();
+    return { ...f };
+  },
+  async create(args) {
+    const b64 = Buffer.isBuffer(args.data.data) ? args.data.data.toString("base64") : Buffer.from(args.data.data).toString("base64");
+    const f = { id: require("crypto").randomUUID(), path: args.data.path, mime: args.data.mime, data: b64, estimateId: args.data.estimateId ?? null, createdAt: new Date() };
+    store.storedFiles.push(f);
+    saveStore();
+    return { ...f };
+  },
+  async deleteMany(args) {
+    const before = store.storedFiles.length;
+    if (!args?.where) store.storedFiles = [];
+    else {
+      const where = args.where;
+      store.storedFiles = store.storedFiles.filter((f) => {
+        for (const [k,v] of Object.entries(where)) if (f[k] !== v) return true;
+        return false;
+      });
+    }
+    const after = store.storedFiles.length;
+    if (before !== after) saveStore();
+    return { count: before - after };
   },
 };
 
@@ -1116,6 +1172,7 @@ export const mockPrisma = {
   estimateRender,
   estimateOption,
   estimateOptionItem,
+  storedFile,
   // helpers for seed/demo — use getters so they stay in sync after reload/reset
   get _store() {
     return store;
@@ -1133,6 +1190,7 @@ export const mockPrisma = {
   estimateRender: typeof estimateRender;
   estimateOption: typeof estimateOption;
   estimateOptionItem: typeof estimateOptionItem;
+  storedFile: typeof storedFile;
   readonly _store: Store;
   _save: typeof saveStore;
   _reload: () => void;
@@ -1140,6 +1198,6 @@ export const mockPrisma = {
 
 // Reset helper for dev
 export function resetMockStore() {
-  store = { contractors: [], priceItems: [], estimates: [], estimateItems: [], estimateRenders: [], materials: [], estimateOptions: [], estimateOptionItems: [] };
+  store = { contractors: [], priceItems: [], estimates: [], estimateItems: [], estimateRenders: [], materials: [], estimateOptions: [], estimateOptionItems: [], storedFiles: [] };
   saveStore();
 }
